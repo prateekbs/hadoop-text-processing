@@ -1,65 +1,91 @@
 import java.io.IOException;
-import java.util.*;
-        
+import java.util.Iterator;
+import java.util.StringTokenizer;
+
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.conf.*;
-import org.apache.hadoop.io.*;
-import org.apache.hadoop.mapreduce.*;
-import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
-import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
-import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
-        
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapred.FileInputFormat;
+import org.apache.hadoop.mapred.FileOutputFormat;
+import org.apache.hadoop.mapred.FileSplit;
+import org.apache.hadoop.mapred.JobClient;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.MapReduceBase;
+import org.apache.hadoop.mapred.Mapper;
+import org.apache.hadoop.mapred.OutputCollector;
+import org.apache.hadoop.mapred.Reducer;
+import org.apache.hadoop.mapred.Reporter;
+
 public class CorpusCalculator {
-        
- public static class Map extends Mapper<LongWritable, Text, Text, Text> {
-    private Text word = new Text();
-    public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
-        String line = value.toString();
-        StringTokenizer tokenizer = new StringTokenizer(line);
-        int position=0;
-        while (tokenizer.hasMoreTokens()) {
-        	position=position+1;
-            word.set(tokenizer.nextToken());
-            context.write(new Text(Integer.toString(position)),word);
+
+  public static class LineIndexMapper extends MapReduceBase
+      implements Mapper<LongWritable, Text, Text, Text> {
+
+    private final static Text word = new Text();
+    private final static Text location = new Text();
+
+    public void map(LongWritable key, Text val,
+        OutputCollector<Text, Text> output, Reporter reporter)
+        throws IOException {
+	    	String line = val.toString();
+	        StringTokenizer tokenizer = new StringTokenizer(line);
+	        int position=0;
+	        while (tokenizer.hasMoreTokens()) {
+	        	position=position+1;
+	            word.set(tokenizer.nextToken());
+	            output.collect(new Text(Integer.toString(position)),word);
+	        }      
         }
-    }
- } 
-        
- public static class Reduce extends Reducer<Text, Text, Text, Text> {
-	private Text word = new Text();
-    public void reduce(Text key, Iterator<Text> values, Context context) 
-      throws IOException, InterruptedException {
-      StringBuilder toReturn = new StringBuilder();
+  }
+
+
+
+  public static class LineIndexReducer extends MapReduceBase
+      implements Reducer<Text, Text, Text, Text> {
+
+    public void reduce(Text key, Iterator<Text> values,
+        OutputCollector<Text, Text> output, Reporter reporter)
+        throws IOException {
+
       boolean first = true;
+      StringBuilder toReturn = new StringBuilder();
       while (values.hasNext()){
-          if (!first)
-            toReturn.append(", ");
-          first=false;
-          toReturn.append(values.next().toString());
+        if (!first)
+          toReturn.append(", ");
+        first=false;
+        toReturn.append(values.next().toString());
       }
-      context.write(key, new Text(toReturn.toString()));
+
+      output.collect(key, new Text(toReturn.toString()));
     }
- }
-        
- public static void main(String[] args) throws Exception {
-    Configuration conf = new Configuration();
-        
-        Job job = new Job(conf, "wordcount");
-    
-    job.setOutputKeyClass(Text.class);
-    job.setOutputValueClass(Text.class);
-        
-    job.setMapperClass(Map.class);
-    job.setReducerClass(Reduce.class);
-        
-    job.setInputFormatClass(TextInputFormat.class);
-    job.setOutputFormatClass(TextOutputFormat.class);
-        
-    FileInputFormat.addInputPath(job, new Path(args[0]));
-    FileOutputFormat.setOutputPath(job, new Path(args[1]));
-        
-    job.waitForCompletion(true);
- }
-        
+  }
+
+
+  /**
+   * The actual main() method for our program; this is the
+   * "driver" for the MapReduce job.
+   */
+  public static void main(String[] args) {
+    JobClient client = new JobClient();
+    JobConf conf = new JobConf(CorpusCalculator.class);
+
+    conf.setJobName("CorpusCalculator");
+
+    conf.setOutputKeyClass(Text.class);
+    conf.setOutputValueClass(Text.class);
+
+    FileInputFormat.addInputPath(conf, new Path("input"));
+    FileOutputFormat.setOutputPath(conf, new Path("output"));
+
+    conf.setMapperClass(LineIndexMapper.class);
+    conf.setReducerClass(LineIndexReducer.class);
+
+    client.setConf(conf);
+
+    try {
+      JobClient.runJob(conf);
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
 }
