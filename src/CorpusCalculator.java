@@ -1,5 +1,8 @@
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
 import java.util.StringTokenizer;
 
 import org.apache.hadoop.fs.Path;
@@ -42,18 +45,34 @@ public class CorpusCalculator {
 
   public static class LineIndexReducer extends MapReduceBase
       implements Reducer<Text, Text, Text, Text> {
-
+	  
     public void reduce(Text key, Iterator<Text> values,
         OutputCollector<Text, Text> output, Reporter reporter)
         throws IOException {
-
+      Map<String,Integer> tokenMap = new HashMap<String, Integer>();
       boolean first = true;
       StringBuilder toReturn = new StringBuilder();
+      String token;
+      Integer count; 
       while (values.hasNext()){
-        if (!first)
-          toReturn.append(", ");
-        first=false;
-        toReturn.append(values.next().toString());
+    	token=values.next().toString();
+    	count=tokenMap.get(token);
+    	if (count==null){
+    		tokenMap.put(token,1);
+    	}
+    	else{
+    		tokenMap.put(token,count+1);
+    	}
+                
+      }
+      Set<String> keys = tokenMap.keySet();
+      for (String s : keys) {
+    	  if (!first){
+    		  toReturn.append(", ");
+    	      first=false; 
+    	  }
+    	  toReturn.append(s+" ");
+    	  toReturn.append(tokenMap.get(s)+", ");
       }
 
       output.collect(key, new Text(toReturn.toString()));
