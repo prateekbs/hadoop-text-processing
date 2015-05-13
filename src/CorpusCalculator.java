@@ -107,6 +107,12 @@ public static class TokenizerMapper2
   extends Mapper<Object, Text, Text, Text>{
   public void map(Object key, Text value, Context context
                ) throws IOException, InterruptedException {
+	  /**In the second Mapper stage, we emit the sentence as the key and the probability of the word as value. 
+	   * This ensures that we can multiply all the probability values in the reducer stage to get the 
+	   * probability of occurrence of the sentence. 
+	   * (1,<Hello 0.5, hello hadoop>)  that is received from the reducer would be emitted as 
+	   * (<hello hadoop>,0.5)
+	   */
    String line = value.toString();
    String[] tokenSentenceProbability=line.split("\\{|\\}|,|\\n");
    List<String> listTokenSentenceProbability = new ArrayList<String>(Arrays.asList(tokenSentenceProbability));
@@ -129,6 +135,11 @@ private Map<String, Double> countMap=new HashMap<>();
 public void reduce(Text key, Iterable<Text> values,
                 Context context
                 ) throws IOException, InterruptedException {
+	/**
+	 * In the second reducer stage, we multiply all the probability values received to get the 
+	 * probability of the entire sentence. We also dump all the sentences onto a Hashmap and sort by 
+	 * value and get the top 3 sentences with highest probability.
+	 */
 	StringBuilder toReturn = new StringBuilder();
 	for (Text val : values) {
 		toReturn.append(val.toString());
@@ -159,6 +170,10 @@ public static class TokenizerMapper3
 extends Mapper<Object, Text, Text, Text>{
 public void map(Object key, Text value, Context context
              ) throws IOException, InterruptedException {
+	/**
+	 * The third mapper stage acts as a dummy stage that passes everything that it receives from the second reducer
+	 * to the third reducer.  
+	 */
 String line = value.toString();
 String[] sentenceProbability=line.split("\\s+");
 StringBuilder toSendKey = new StringBuilder();
@@ -181,6 +196,11 @@ private Map<String, Double> countMap=new HashMap<>();
 public void reduce(Text key, Iterable<Text> values,
                 Context context
                 ) throws IOException, InterruptedException {
+	/**
+	 * Every reducer would have got the top  3 sentences with highest probability. In this stage,
+	 * we do the top 3 sentences across all reducers. We need to set the number of reducers to 1 as follows:
+	 *  job3.setNumReduceTasks(1);
+	 */
 	StringBuilder toReturn = new StringBuilder();
 	for (Text val : values) {
 		toReturn.append(val.toString());
@@ -202,6 +222,10 @@ protected void cleanup(Context context) throws IOException, InterruptedException
 
 
   public static void main(String[] args) throws Exception {
+	/**
+	 * Chaining multiple Map reduce jobs and making the later ones wait until the 
+	 * previous ones have completed.   
+	 */
     Configuration conf = new Configuration();
     Job job = Job.getInstance(conf, "CorpusCalculator");
     job.setJarByClass(CorpusCalculator.class);
